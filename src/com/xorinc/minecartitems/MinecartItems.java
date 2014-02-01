@@ -6,12 +6,9 @@ import java.util.Random;
 import net.minecraft.server.v1_7_R1.Block;
 import net.minecraft.server.v1_7_R1.ContainerAnvil;
 import net.minecraft.server.v1_7_R1.ContainerAnvilInventory;
-import net.minecraft.server.v1_7_R1.ContainerEnchantTable;
 import net.minecraft.server.v1_7_R1.EntityHuman;
 import net.minecraft.server.v1_7_R1.EntityMinecartAbstract;
 import net.minecraft.server.v1_7_R1.EntityPlayer;
-import net.minecraft.server.v1_7_R1.ICrafting;
-import net.minecraft.server.v1_7_R1.IInventory;
 import net.minecraft.server.v1_7_R1.PacketPlayOutOpenWindow;
 
 import org.bukkit.Bukkit;
@@ -23,7 +20,6 @@ import org.bukkit.Sound;
 import org.bukkit.craftbukkit.v1_7_R1.entity.CraftMinecart;
 import org.bukkit.craftbukkit.v1_7_R1.entity.CraftPlayer;
 import org.bukkit.craftbukkit.v1_7_R1.inventory.CraftInventory;
-import org.bukkit.craftbukkit.v1_7_R1.inventory.CraftItemStack;
 import org.bukkit.craftbukkit.v1_7_R1.util.CraftMagicNumbers;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Minecart;
@@ -33,9 +29,8 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
-import org.bukkit.event.enchantment.PrepareItemEnchantEvent;
+import org.bukkit.event.block.BlockDispenseEvent;
 import org.bukkit.event.inventory.InventoryClickEvent;
-import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.inventory.InventoryType.SlotType;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
@@ -79,11 +74,11 @@ public class MinecartItems extends JavaPlugin implements Listener {
 			break;
 		
 		case WORKBENCH:
-			e.getPlayer().openInventory(Bukkit.createInventory(null, InventoryType.WORKBENCH));
+			e.getPlayer().openWorkbench(null, true);
 			break;
 			
 		case ENCHANTMENT_TABLE:
-			openEnchanting(e.getPlayer());
+			e.getPlayer().openEnchanting(null, true);
 			break;
 		
 		case ANVIL:
@@ -97,6 +92,18 @@ public class MinecartItems extends JavaPlugin implements Listener {
 		
 		e.setCancelled(true);
 		
+	}
+	
+	@EventHandler(priority = EventPriority.LOWEST, ignoreCancelled = true)
+	public void onBlockDispense(BlockDispenseEvent e){
+		
+		if(e.getBlock().getType() != Material.DISPENSER || !isCart(e.getItem().getType()) || !e.getItem().hasItemMeta() || !e.getItem().getItemMeta().hasDisplayName())
+			return;
+		
+		String name = e.getItem().getItemMeta().getDisplayName();
+		
+		if(name.equals(ENDER_CHEST) || name.equals(WORK_BENCH) || name.equals(ENCHANTING) || name.equals(ANVIL) || name.equals(ANVIL_1) || name.equals(ANVIL_2))
+			e.setCancelled(true);
 	}
 	
 	@EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -345,19 +352,7 @@ public class MinecartItems extends JavaPlugin implements Listener {
 		}
 		
 	}
-	
-	private static void openEnchanting(Player p){
-		
-		EntityPlayer player = ((CraftPlayer) p).getHandle();
-		int id = player.nextContainerCounter();
-		
-		player.playerConnection.sendPacket(new PacketPlayOutOpenWindow(id, 4, "Enchant", 9, true));
-		player.activeContainer = new FakeTable(player);
-		player.activeContainer.windowId = id;
-		player.activeContainer.addSlotListener(player);
-		
-	}
-	
+
 	private static void openAnvil(Player p, Minecart m){
 		
 		EntityPlayer player = ((CraftPlayer) p).getHandle();
@@ -368,64 +363,6 @@ public class MinecartItems extends JavaPlugin implements Listener {
 		player.activeContainer.windowId = id;
 		player.activeContainer.addSlotListener(player);
 		
-	}
-	
-	private static class FakeTable extends ContainerEnchantTable {
-		
-		private EntityPlayer p;
-		private Random random = new Random();
-		
-		public FakeTable(EntityPlayer entity) {
-			
-			super(entity.inventory, entity.world, 0, 0, 0);
-			this.p = entity;
-		}
-		
-		@SuppressWarnings("deprecation")
-		@Override
-		public void addSlotListener(ICrafting ic){
-			
-			super.addSlotListener(ic);
-			
-			if(ic instanceof EntityPlayer){
-				
-				((EntityPlayer) ic).getBukkitEntity().updateInventory();
-				
-			}
-		}
-		
-		@Override
-		public void a(IInventory iinventory) {
-			if (iinventory == this.enchantSlots) {
-				net.minecraft.server.v1_7_R1.ItemStack itemstack = iinventory.getItem(0);
-
-				if (itemstack != null) {
-					this.costs[0] = random.nextInt(8) + 1;
-					this.costs[1] = random.nextInt(8) + 1;
-					this.costs[2] = random.nextInt(8) + 1;
-
-					CraftItemStack item = CraftItemStack.asCraftMirror(itemstack);
-
-					PrepareItemEnchantEvent event = new PrepareItemEnchantEvent(p.getBukkitEntity(), this.getBukkitView(), null, item, this.costs, 0);
-					event.setCancelled(!itemstack.x());
-
-					Bukkit.getPluginManager().callEvent(event);
-
-					if (!event.isCancelled()) {
-						return;
-					}
-				}
-
-				this.costs[0] = 0;
-				this.costs[1] = 0;
-				this.costs[2] = 0;
-			}
-		}
-
-		@Override
-		public boolean a(EntityHuman entityhuman) {
-			return true;
-		}
 	}
 	
 	private static class FakeAnvil extends ContainerAnvil {
